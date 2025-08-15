@@ -47,7 +47,22 @@ GROQ_KEY=your_groq_api_key_here
 python app.py
 ```
 
+If you wish to have the app not have a console attached with it change the file extension from app.py to app.pyw
+
 Visit [http://localhost:5000](http://localhost:5000) in your browser.
+
+---
+
+## API Key requirement explanation.
+Having a .env file created AND with a value assigned to GROQ_KEY is REQUIRED for Ova to function in any way.
+
+- If .env exists but GROQ_KEY isnt assigned a value: A red error box will appear stating that "GROQ_KEY not found in .env file. Please add your Groq API key."
+
+- If .env doesnt exist: A red error box will appear stating "No .env file found. Please create one with your GROQ_KEY."
+
+- No matter what if one of these errors occur ALL api routes get blocked and return 403. 
+
+---
 
 ## Customization
 
@@ -101,6 +116,11 @@ All CSS is in the `<style>` block at the top of `templates/index.html`. Change c
 - GroqCloud - Hosting the great LLMs i used, tyvm
 
 ---
+
+# ⚠️ Known Issues ⚠️
+- Users wont be displayed in the login screen if a pfp isnt added alongside it
+- When creating a user (with a pfp) they arent logged in, a page refresh is required and then choosing the user otherwise chat elements dont start
+- Chat titles often bug out and the model creates incorrect/nonsense titles.
 
 ## Developer Documentation
 

@@ -544,6 +544,40 @@
             animation: fadeOutUp 0.5s ease forwards;
         }
 
+        .warning-popup {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ff4444;
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            z-index: 3000;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            max-width: 400px;
+            width: 90%;
+            opacity: 0;
+            animation: fadeInDown 0.5s ease forwards;
+        }
+
+        .warning-popup a {
+            color: white;
+            text-decoration: underline;
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -20px);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, 0);
+            }
+        }
+
         .settings-profile-row {
             display: flex;
             align-items: center;
@@ -740,8 +774,13 @@
     </style>
 </head>
 <body>
+    {% if env_error %}
+    <div class="warning-popup">
+        {{ env_error }} Please refer to the <a href="https://github.com/xHeXifx/OvaWeb#getting-started" target="_blank">README</a> for setup instructions. Ova will not function without a API key set.
+    </div>
+    {% endif %}
     <div id="user-selection-overlay">
-        <h2 class="user-selection-title">Who's using Ova?</h2>
+        <h2 class="user-selection-title">{% if env_error %}Environment Setup Required{% else %}Who's using Ova?{% endif %}</h2>
         <div class="user-grid"></div>
     </div>
 
@@ -805,11 +844,12 @@
 
     <script>
         let currentUser = null;
+
         let currentConversationId = null;
 
         async function loadUsers() {
-            const response = await fetch('/get_users');
-            const users = await response.json();
+            const response = await fetch('/api/get_users');
+            const { users } = await response.json();
             const grid = document.querySelector('.user-grid');
             grid.innerHTML = '';
             
@@ -886,7 +926,7 @@
 
         async function loadConversations() {
             try {
-                const response = await fetch(`/get_conversations?user_id=${currentUser}`);
+                const response = await fetch(`/api/get_conversations?user_id=${currentUser}`);
                 const conversations = await response.json();
                 const sidebar = document.getElementById('sidebar');
                 sidebar.innerHTML = `
@@ -935,7 +975,7 @@
         }
 
         async function getPfpSrc() {
-            const response = await fetch('/get_pfp_type');
+            const response = await fetch('/api/get_pfp_type');
             const data = await response.json();
             const timestamp = new Date().getTime();
             return data.type ? `/static/pfp.${data.type}?${timestamp}` : null;
@@ -957,7 +997,7 @@
             profileTop.appendChild(profilePic);
             if (role === 'user') {
                 const img = document.createElement('img');
-                const pfpResponse = await fetch(`/get_pfp_type?user_id=${currentUser}`);
+                const pfpResponse = await fetch(`/api/get_pfp_type?user_id=${currentUser}`);
                 const pfpData = await pfpResponse.json();
                 
                 if (pfpData.path) {
@@ -970,7 +1010,7 @@
                     profilePic.innerHTML = '<i class="fas fa-user"></i>';
                 }
                 
-                const configResponse = await fetch(`/get_config?user_id=${currentUser}`);
+                const configResponse = await fetch(`/api/get_config?user_id=${currentUser}`);
                 const config = await configResponse.json();
                 const nameLabel = document.createElement('div');
                 nameLabel.className = 'profile-name';
@@ -1123,7 +1163,7 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
             try {
-                const response = await fetch(`/chat?user_id=${currentUser}`, {
+                const response = await fetch(`/api/chat?user_id=${currentUser}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(messageData)
@@ -1268,12 +1308,12 @@
         async function confirmDelete() {
             if (!conversationToDelete) return;
             
-            const response = await fetch(`/delete_conversation/${conversationToDelete}?user_id=${currentUser}`, {
+            const response = await fetch(`/api/delete_conversation/${conversationToDelete}?user_id=${currentUser}`, {
                 method: 'DELETE'
             });
 
             if (response.ok) {
-                await fetch(`/cleanup_memory/${conversationToDelete}`, {
+                await fetch(`/api/cleanup_memory/${conversationToDelete}`, {
                     method: 'POST'
                 });
                 
@@ -1297,7 +1337,7 @@
             welcomeScreen.className = 'welcome-screen';
             
             // fetch config for current user
-            const config = await fetch(`/get_config?user_id=${currentUser}`).then(res => res.json());
+            const config = await fetch(`/api/get_config?user_id=${currentUser}`).then(res => res.json());
             const username = config.username || 'User';
             
             const logo = document.createElement('i');
@@ -1395,8 +1435,8 @@
             }
             
             const [configResponse, pfpTypeResponse] = await Promise.all([
-                fetch(`/get_config?user_id=${currentUser}`),
-                fetch(`/get_pfp_type?user_id=${currentUser}`)
+                fetch(`/api/get_config?user_id=${currentUser}`),
+                fetch(`/api/get_pfp_type?user_id=${currentUser}`)
             ]);
             
             const config = await configResponse.json();
@@ -1444,7 +1484,7 @@
                 system_prompt: document.getElementById('system-prompt-input').value
             };
 
-            const response = await fetch(`/save_config?user_id=${currentUser}`, {
+            const response = await fetch(`/api/save_config?user_id=${currentUser}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -1459,7 +1499,7 @@
                 const formData = new FormData();
                 formData.append('pfp', pfpInput.files[0]);
                 
-                await fetch(`/upload_pfp?user_id=${currentUser}`, {
+                await fetch(`/api/upload_pfp?user_id=${currentUser}`, {
                     method: 'POST',
                     body: formData
                 });

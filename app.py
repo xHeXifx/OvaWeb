@@ -15,6 +15,22 @@ load_dotenv()
 groq_key = os.getenv("GROQ_KEY")
 
 app = Flask(__name__, static_folder='static')
+
+@app.before_request
+def check_env_variables():
+    if request.endpoint == 'static':
+        return
+    
+    env_error = None
+    if not os.path.exists('.env'):
+        env_error = "No .env file found. Please create one with your GROQ_KEY."
+    elif not groq_key:
+        env_error = "GROQ_KEY not found in .env file. Please add your Groq API key."
+    
+    if env_error:
+        if request.path.startswith('/api/'):
+            return jsonify({"error": "env_error", "message": env_error}), 403
+        return render_template('index.html', env_error=env_error)
 os.makedirs('static', exist_ok=True)
 CHAT_HISTORY_FILE = "chat_history.json"
 
@@ -87,7 +103,7 @@ def load_config(user_id=None):
             return json.load(f)
     return default_config
 
-@app.route('/save_config', methods=['POST'])
+@app.route('/api/save_config', methods=['POST'])
 def save_config():
     user_id = request.args.get('user_id', 'default')
     config = request.json
@@ -101,7 +117,7 @@ def save_config():
         json.dump(config, f, indent=4)
     return jsonify({"success": True, "user_id": user_id})
 
-@app.route('/get_config')
+@app.route('/api/get_config')
 def get_config():
     user_id = request.args.get('user_id', 'default')
     if (user_id == 'guest'):
@@ -111,7 +127,7 @@ def get_config():
         })
     return jsonify(load_config())
 
-@app.route('/get_users')
+@app.route('/api/get_users')
 def get_users():
     users = []
     
@@ -136,13 +152,13 @@ def get_users():
         'image': None
     })
     
-    return jsonify(users)
+    return jsonify({'users': users})
 
 @app.route('/')
 def home():
     return render_template('index.html')
 
-@app.route('/chat', methods=['POST'])
+@app.route('/api/chat', methods=['POST'])
 def chat():
     data = request.json
     message = data.get('message')
@@ -198,12 +214,12 @@ def chat():
         "title": chat_history[conversation_id]['title']
     })
 
-@app.route('/get_conversations')
+@app.route('/api/get_conversations')
 def get_conversations():
     chat_history = load_chat_history()
     return jsonify(chat_history)
 
-@app.route('/delete_conversation/<conversation_id>', methods=['DELETE'])
+@app.route('/api/delete_conversation/<conversation_id>', methods=['DELETE'])
 def delete_conversation(conversation_id):
     user_id = request.args.get('user_id')
     if not user_id:
@@ -218,7 +234,7 @@ def delete_conversation(conversation_id):
         return jsonify({"success": True})
     return jsonify({"success": False}), 404
 
-@app.route('/get_pfp_type')
+@app.route('/api/get_pfp_type')
 def get_pfp_type():
     user_id = request.args.get('user_id', 'default')
     gif_path = os.path.join(app.static_folder, f"pfp_user_{user_id}.gif")
@@ -230,7 +246,7 @@ def get_pfp_type():
         return jsonify({"type": "jpg", "path": f"pfp_user_{user_id}.jpg"})
     return jsonify({"type": None, "path": None})
 
-@app.route('/upload_pfp', methods=['POST'])
+@app.route('/api/upload_pfp', methods=['POST'])
 def upload_pfp():
     if 'pfp' not in request.files:
         return jsonify({"error": "No file provided"}), 400
@@ -268,7 +284,7 @@ def upload_pfp():
                 
         return jsonify({"success": True, "filename": filename})
 
-@app.route('/cleanup_memory/<conversation_id>', methods=['POST'])
+@app.route('/api/cleanup_memory/<conversation_id>', methods=['POST'])
 def cleanup_memory(conversation_id):
     if conversation_id in conversation_memories:
         del conversation_memories[conversation_id]
