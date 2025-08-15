@@ -15,7 +15,7 @@ I built ts project quite a while ago and strangly never uploaded to github so no
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/xhexifx/ovaweb
+git clone https://github.com/xHeXifx/OvaWeb.git
 cd ovaweb
 ```
 
