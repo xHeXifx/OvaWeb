@@ -7,7 +7,10 @@ This document explains in detail how ts works ^w^
 ## Backend (`app.py`)
 
 - **Framework:** Flask
-- **LLM:** Groq via LangChain (`ChatGroq`)
+- **LLM Options:**
+  - **Cloud:** Groq via LangChain (`ChatGroq`) using model specified in `.env`
+  - **Local:** Ollama via custom `OllamaLLM` class using any model available in your Ollama installation
+- **Backend Selection:** Controlled via environment variables in `.env` file
 - **Memory:** Per-conversation memory using `ConversationBufferMemory`
 - **Persistence:** User configs and chat histories stored as JSON files on disk
 - **Profile Pictures:** Uploaded and stored in `/static` as `pfp_user_{user_id}.jpg` or `.gif`
@@ -24,10 +27,10 @@ This document explains in detail how ts works ^w^
 
 ### Conversation Flow
 
-1. On message, loads/creates a `ConversationChain` for the conversation.
+1. On message, loads/creates a `ConversationChain` for the conversation with the appropriate backend (Groq or Ollama).
 2. Uses user's system prompt and username in the prompt template.
 3. Stores messages and memory buffer in JSON.
-4. For new conversations, generates a short title using the LLM.
+4. For new conversations, generates a short title using the selected LLM.
 
 ---
 
@@ -37,6 +40,7 @@ This document explains in detail how ts works ^w^
 - **User Selection:** Overlay for picking/creating user profiles
 - **Chat:** Animated message rendering, Markdown/code support, typing effect
 - **Settings:** Modal for editing username, system prompt, and uploading profile picture
+- **Backend Indicator:** Visual indicator showing whether using cloud (Groq) or local (Ollama) backend with model name on hover
 
 ### JavaScript Structure
 
@@ -66,7 +70,10 @@ This document explains in detail how ts works ^w^
 
 - To add new quick actions, edit the welcome screen HTML.
 - To support more file types for profile pictures, update the allowed extensions in `app.py` (`upload_pfp` route).
-- To change the LLM model, modify `model_name` in `app.py`.
+- To change the LLM model:
+  - For Groq: Modify the GROQ_MODEL variable in your .env file
+
+  - For Ollama: Change the OLLAMA_MODEL in your .env file
 
 ---
 
@@ -74,6 +81,8 @@ This document explains in detail how ts works ^w^
 
 - No authentication; users are identified by profile selection.
 - All data is stored locally; not suitable for production without further security.
+- When using local backend (Ollama), no API keys are sent to external services.
+- When using cloud backend (Groq), API key is required and stored in the .env file.
 
 ---
 
@@ -82,6 +91,9 @@ This document explains in detail how ts works ^w^
 - `app.py`: Flask backend, LLM integration, user/conversation management
 - `templates/index.html`: UI, JavaScript logic, CSS
 - `requirements.txt`: Python dependencies
+- `.env`: Configuration file for backend selection and API keys
+- `groq-setup.md`: Instructions for setting up Groq cloud backend
+- `local-setup.md`: Instructions for setting up Ollama local backend
 
 ---
 

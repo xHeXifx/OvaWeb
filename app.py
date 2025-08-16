@@ -3,16 +3,72 @@ from langchain_groq import ChatGroq
 from langchain.chains import ConversationChain
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
+from langchain.llms.base import LLM
 import json
 from datetime import datetime
 import os
+import requests
+from typing import Any, Dict, List, Mapping, Optional
 from werkzeug.utils import secure_filename
 from langchain.schema import messages_from_dict, messages_to_dict
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 load_dotenv()
 
 groq_key = os.getenv("GROQ_KEY")
+groq_model = os.getenv("GROQ_MODEL")
+
+backend = os.getenv("backend")
+OLLAMA_HOST = os.getenv("OLLAMA_HOST")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL")
+
+class OllamaLLM(LLM):
+    
+    host: str = None
+    model: str = None
+    
+    class Config:
+        arbitrary_types_allowed = True
+    
+    def __init__(self, host: str, model: str):
+        super().__init__()
+        self.host = host
+        self.model = model
+    
+    @property
+    def _identifying_params(self) -> Mapping[str, Any]:
+        return {"host": self.host, "model": self.model}
+        
+    @property
+    def _llm_type(self) -> str:
+        return "ollama"
+    
+    def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
+        """call the Ollama API with the given prompt"""
+        try:
+            url = f"{self.host}/api/generate"
+            headers = {"Content-Type": "application/json"}
+            data = {
+                "model": self.model,
+                "prompt": prompt,
+                "stream": False
+            }
+            
+            response = requests.post(url, headers=headers, json=data)
+            
+            if response.status_code != 200:
+                error_msg = f"Ollama API returned error: {response.status_code} - {response.text}"
+                raise ValueError(error_msg)
+                
+            result = response.json()
+            return result.get("response", "")
+        except requests.RequestException as e:
+            raise ConnectionError(f"Failed to connect to Ollama: {str(e)}. Make sure Ollama is running at {self.host}")
+        except json.JSONDecodeError:
+            raise ValueError(f"Invalid JSON response from Ollama API: {response.text}")
+        except Exception as e:
+            raise RuntimeError(f"Unexpected error when calling Ollama: {str(e)}")
 
 app = Flask(__name__, static_folder='static')
 
@@ -23,9 +79,16 @@ def check_env_variables():
     
     env_error = None
     if not os.path.exists('.env'):
-        env_error = "No .env file found. Please create one with your GROQ_KEY."
-    elif not groq_key:
-        env_error = "GROQ_KEY not found in .env file. Please add your Groq API key."
+        env_error = "No .env file found. Please create one with your configuration."
+    elif backend == "groq" and not groq_key:
+        env_error = "GROQ_KEY not found in .env file. Please add your Groq API key when using 'groq' backend."
+    elif backend == "local" and (not OLLAMA_HOST or not OLLAMA_MODEL):
+        if not OLLAMA_HOST:
+            env_error = "OLLAMA_HOST not found in .env file. Please add your Ollama host URL when using 'local' backend."
+        elif not OLLAMA_MODEL:
+            env_error = "OLLAMA_MODEL not found in .env file. Please specify which Ollama model to use."
+    elif backend not in ["groq", "local"]:
+        env_error = "Invalid backend specified in .env file. Please use 'groq' or 'local'."
     
     if env_error:
         if request.path.startswith('/api/'):
@@ -47,16 +110,31 @@ def get_conversation_chain(conversation_id):
         if conversation_id in chat_history and 'memory_buffer' in chat_history[conversation_id]:
             memory_messages = messages_from_dict(chat_history[conversation_id]['memory_buffer'])
             memory.chat_memory.messages = memory_messages
-            
-        llm = ChatGroq(
-            groq_api_key=groq_key,
-            model_name="gemma2-9b-it"
-        )
+        
+        # init LLM based on backend setting
+        if backend == "groq":
+            llm = ChatGroq(
+                groq_api_key=groq_key,
+                model_name=groq_model
+            )
+        elif backend == "local":
+            try:
+                llm = OllamaLLM(
+                    host=OLLAMA_HOST,
+                    model=OLLAMA_MODEL
+                )
+            except Exception as e:
+                error_msg = f"Failed to initialize Ollama: {str(e)}"
+                raise RuntimeError(error_msg)
+        else:
+            raise ValueError(f"Unsupported backend: {backend}")
         
         # pass user id to load_config function to get user settings
         config = load_config(request.args.get('user_id', 'default'))
-        template = f"""{{history}}
-{config['system_prompt']} The user's name is {config['username']}.
+        
+        template = f"""{config['system_prompt']} The user's name is {config['username']}.
+
+{{history}}
 Human: {{input}}
 Assistant: """
         
@@ -103,6 +181,24 @@ def load_config(user_id=None):
             return json.load(f)
     return default_config
 
+@app.route('/api/get_backend_info')
+def get_backend_info():
+    if backend == "groq":
+        return jsonify({
+            "type": "cloud",
+            "model": groq_model
+        })
+    elif backend == "local":
+        return jsonify({
+            "type": "local",
+            "model": OLLAMA_MODEL
+        })
+    else:
+        return jsonify({
+            "type": "unknown",
+            "model": "unknown"
+        })
+
 @app.route('/api/save_config', methods=['POST'])
 def save_config():
     user_id = request.args.get('user_id', 'default')
@@ -121,11 +217,20 @@ def save_config():
 def get_config():
     user_id = request.args.get('user_id', 'default')
     if (user_id == 'guest'):
-        return jsonify({
+        config = {
             "username": "Guest",
             "system_prompt": "You are a digital assistant called Ova. You are here to help me with my tasks. Use new lines for better readability."
-        })
-    return jsonify(load_config())
+        }
+    else:
+        config = load_config()
+    
+    config['backend_type'] = backend
+    if backend == "local" and OLLAMA_MODEL:
+        config['model_name'] = OLLAMA_MODEL
+    elif backend == "groq":
+        config['model_name'] = groq_model
+    
+    return jsonify(config)
 
 @app.route('/api/get_users')
 def get_users():
@@ -182,13 +287,55 @@ def chat():
 
     # for new conversations generate title
     if is_new_conversation:
-        title_llm = ChatGroq(
-            groq_api_key=groq_key,
-            model_name="gemma2-9b-it"
-        )
-        title_prompt = "Generate a very short (2-4 words) title for this conversation based on: " + message
-        title = title_llm.predict(title_prompt).strip()
-        title = ' '.join(title.split('\n')[0].split()[:4])
+        title_prompt = "Create a very short title (2-4 words only) for a conversation that starts with this message. ONLY respond with the title, no other text: " + message
+        
+        # use the chosen backend for title generation
+        if backend == "groq":
+            title_llm = ChatGroq(
+                groq_api_key=groq_key,
+                model_name=groq_model
+            )
+            title_response = title_llm.predict(title_prompt).strip()
+        elif backend == "local":
+            try:
+                title_llm = OllamaLLM(
+                    host=OLLAMA_HOST,
+                    model=OLLAMA_MODEL
+                )
+                title_response = title_llm._call(title_prompt).strip()
+            except Exception as e:
+                # fallback to a generic title if Ollama fails
+                app.logger.error(f"Failed to generate title with Ollama: {str(e)}")
+                title_response = f"Conversation {conversation_id[:6]}"
+        else:
+            title_response = f"Conversation {conversation_id[:6]}"
+        
+        # clean up the title - the ai was being annoying and kept adding prefix words before the title so this is here just in case
+        common_prefixes = ["sure", "here", "is", "a", "the", "title", "for", "this", "conversation", "would", "be", "could", "i", "think", "based", "on"]
+        
+        # filter out common prefixes
+        words = title_response.lower().split()
+        start_idx = 0
+        
+        # find where the actual title
+        for i, word in enumerate(words):
+            if word.strip(',.!?:;') not in common_prefixes:
+                start_idx = i
+                break
+        
+        title_words = title_response.split()[start_idx:start_idx+4]
+        
+        if not title_words and len(words) > 0:
+            title_words = title_response.split()[-4:]
+        
+        # join words and capitalize
+        title = ' '.join(title_words).strip()
+        title = ' '.join(word.capitalize() for word in title.split())
+        
+        # use fallback if titles still somehow empty
+        if not title:
+            title = f"Conversation {conversation_id[:6]}"
+            
         chat_history[conversation_id]['title'] = title
 
     # update chat history ...

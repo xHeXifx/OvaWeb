@@ -44,6 +44,33 @@
             font-size: 1.5em;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
+        
+        .backend-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 0.8em;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 5px 10px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .backend-indicator .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        
+        .backend-indicator .dot.cloud {
+            background-color: #4a9df8;
+        }
+        
+        .backend-indicator .dot.local {
+            background-color: #4af87f;
+        }
 
         .sidebar-content {
             display: flex;
@@ -771,6 +798,55 @@
         #logout-btn:hover {
             transform: rotate(-45deg);
         }
+        
+        #backend-indicator {
+            position: fixed;
+            top: 20px;
+            right: 120px;
+            z-index: 1000;
+            background: var(--sidebar-dark);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+
+        #backend-indicator i {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            margin: 0;
+            padding-left: 1px;
+        }
+
+        
+        #backend-indicator:hover {
+            width: auto;
+            padding: 0 15px;
+            border-radius: 20px;
+        }
+        
+        #backend-indicator .model-name {
+            white-space: nowrap;
+            margin-left: 10px;
+            opacity: 0;
+            width: 0;
+            transition: all 0.3s ease;
+        }
+        
+        #backend-indicator:hover .model-name {
+            opacity: 1;
+            width: auto;
+        }
     </style>
 </head>
 <body>
@@ -813,6 +889,11 @@
     <div id="logout-btn" style="display: none;">
         <i class="fas fa-sign-out-alt"></i>
     </div>
+    
+    <div id="backend-indicator" style="display: none;">
+        <i id="backend-icon"></i>
+        <span class="model-name" id="model-name"></span>
+    </div>
 
     <div id="settings-modal" class="modal">
         <div class="modal-content">
@@ -846,7 +927,7 @@
         let currentUser = null;
 
         let currentConversationId = null;
-
+        
         async function loadUsers() {
             const response = await fetch('/api/get_users');
             const { users } = await response.json();
@@ -936,6 +1017,7 @@
                     </button>
                     <h2>Conversations</h2>
                 `;
+                
                 
                 // sort conversations by ID in reverse order so newst appear first
                 const sortedEntries = Object.entries(conversations).sort((a, b) => b[0].localeCompare(a[0]));
@@ -1390,6 +1472,7 @@
         // show welcome screen when first load
         window.addEventListener('load', async () => {
             await loadUsers();
+            fetchBackendInfo();
             if (!currentConversationId) {
                 const chatContainer = document.getElementById('chat-container');
                 chatContainer.appendChild(await createWelcomeScreen());
@@ -1537,6 +1620,7 @@
         function showLoginScreen() {
             document.getElementById('settings-btn').style.display = 'none';
             document.getElementById('logout-btn').style.display = 'none';
+            document.getElementById('backend-indicator').style.display = 'none';
             document.getElementById('input-container').style.display = 'none';
             document.getElementById('chat-container').innerHTML = '';
             document.getElementById('sidebar').innerHTML = '';
@@ -1548,11 +1632,40 @@
             loadUsers();
         }
 
+        async function fetchBackendInfo() {
+            try {
+                const response = await fetch('/api/get_backend_info');
+                const data = await response.json();
+                
+                const backendIndicator = document.getElementById('backend-indicator');
+                const backendIcon = document.getElementById('backend-icon');
+                const modelName = document.getElementById('model-name');
+                
+                if (data.type === 'cloud') {
+                    backendIcon.className = 'fas fa-cloud';
+                    backendIcon.style.color = '#4a9df8';
+                } else if (data.type === 'local') {
+                    backendIcon.className = 'fas fa-desktop';
+                    backendIcon.style.color = '#4af87f';
+                } else {
+                    backendIcon.className = 'fas fa-question-circle';
+                    backendIcon.style.color = '#f8a54a';
+                }
+                
+                modelName.textContent = data.model;
+                backendIndicator.style.display = 'flex';
+            } catch (error) {
+                console.error('Error fetching backend info:', error);
+            }
+        }
+        
         function showChatInterface() {
             document.getElementById('settings-btn').style.display = 'flex';
             document.getElementById('logout-btn').style.display = 'flex';
+            document.getElementById('backend-indicator').style.display = 'flex';
             document.getElementById('input-container').style.display = 'flex';
             document.getElementById('user-selection-overlay').style.display = 'none';
+            fetchBackendInfo();
         }
 
         document.getElementById('logout-btn').onclick = () => {
