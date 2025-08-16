@@ -961,7 +961,7 @@
                     <textarea id="system-prompt-input" placeholder="Enter system prompt"></textarea>
                 </div>
                 <div class="modal-buttons">
-                    <button class="btn-cancel" onclick="closeSettingsModal()">Cancel</button>
+                    <button class="btn-cancel" onclick="cancel_user_creation()">Cancel</button>
                     <button onclick="saveSettings()">Save</button>
                 </div>
             </div>
@@ -1679,6 +1679,11 @@
             };
             reader.readAsDataURL(file);
         };
+
+        function cancel_user_creation() {
+            closeSettingsModal()
+            showLoginScreen()
+        }
 
         function showLoginScreen() {
             document.getElementById('settings-btn').style.display = 'none';

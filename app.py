@@ -89,6 +89,14 @@ def check_env_variables():
             env_error = "OLLAMA_HOST not found in .env file. Please add your Ollama host URL when using 'local' backend."
         elif not OLLAMA_MODEL:
             env_error = "OLLAMA_MODEL not found in .env file. Please specify which Ollama model to use."
+    elif backend == "local":
+        # test if ollama is running
+        try:
+            requests.get(OLLAMA_HOST)
+        except requests.ConnectionError as e:
+            env_error = f"{OLLAMA_HOST} failed to connect. Ensure sure your host is correct and Ollama is running."
+            print("Ollama not running.")
+
     elif backend not in ["groq", "local"]:
         env_error = "Invalid backend specified in .env file. Please use 'groq' or 'local'."
     
