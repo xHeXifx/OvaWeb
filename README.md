@@ -13,8 +13,8 @@
 
 ## Previews
 
-### [Groq Preview (Online)](/previews/OvaGroqPreview.mp4)
-### [Locally Hosted Preview](/previews/OvaLocalPreview.mp4)
+### [Groq Preview (Online)](https://youtu.be/jQVNSS8ecNo)
+### [Locally Hosted Preview](https://youtu.be/Nc7O_7pZ3Tg)
 
 ## Getting Started
 
