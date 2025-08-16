@@ -11,6 +11,11 @@
 - Minimalistic chat UI with Markdown rendering
 - Quick action buttons for common tasks
 
+## Previews
+
+### [Groq Preview (Online)](/previews/OvaGroqPreview.mp4)
+### [Locally Hosted Preview](/previews/OvaLocalPreview.mp4)
+
 ## Getting Started
 
 ### [GroqCloud Setup (Online)](groq-setup.md)
