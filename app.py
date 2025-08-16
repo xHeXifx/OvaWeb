@@ -13,6 +13,8 @@ from werkzeug.utils import secure_filename
 from langchain.schema import messages_from_dict, messages_to_dict
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
+from art import *
+import logging
 
 load_dotenv()
 
@@ -70,9 +72,9 @@ class OllamaLLM(LLM):
         except Exception as e:
             raise RuntimeError(f"Unexpected error when calling Ollama: {str(e)}")
 
-app = Flask(__name__, static_folder='static')
+OvaWeb = Flask(__name__, static_folder='static')
 
-@app.before_request
+@OvaWeb.before_request
 def check_env_variables():
     if request.endpoint == 'static':
         return
@@ -132,7 +134,8 @@ def get_conversation_chain(conversation_id):
         # pass user id to load_config function to get user settings
         config = load_config(request.args.get('user_id', 'default'))
         
-        template = f"""{config['system_prompt']} The user's name is {config['username']}.
+        template = f"""{config['system_prompt']} The user's name is {config['username']}. You do not need to mention the user's name in follow-up responses.
+
 
 {{history}}
 Human: {{input}}
@@ -181,7 +184,7 @@ def load_config(user_id=None):
             return json.load(f)
     return default_config
 
-@app.route('/api/get_backend_info')
+@OvaWeb.route('/api/get_backend_info')
 def get_backend_info():
     if backend == "groq":
         return jsonify({
@@ -199,21 +202,32 @@ def get_backend_info():
             "model": "unknown"
         })
 
-@app.route('/api/save_config', methods=['POST'])
+@OvaWeb.route('/api/save_config', methods=['POST'])
 def save_config():
     user_id = request.args.get('user_id', 'default')
     config = request.json
     
+    
     # handle new user creation
     if user_id == 'new':
         user_id = datetime.now().strftime('%Y%m%d%H%M%S')
+    
+    
+    # if no pfp, copy default pfp.jpg and rename to match new user
+    if not os.path.exists(os.path.join(OvaWeb.static_folder, f"pfp_user_{user_id}.jpg")) and not os.path.exists(os.path.join(OvaWeb.static_folder, f"pfp_user_{user_id}.gif")):
+        import shutil
+        default_pfp = os.path.join(OvaWeb.static_folder, "pfp.jpg")
+        user_pfp = os.path.join(OvaWeb.static_folder, f"pfp_user_{user_id}.jpg")
+        shutil.copy2(default_pfp, user_pfp)
+
+
     
     config_file = f"config_user_{user_id}.json"
     with open(config_file, 'w') as f:
         json.dump(config, f, indent=4)
     return jsonify({"success": True, "user_id": user_id})
 
-@app.route('/api/get_config')
+@OvaWeb.route('/api/get_config')
 def get_config():
     user_id = request.args.get('user_id', 'default')
     if (user_id == 'guest'):
@@ -232,23 +246,30 @@ def get_config():
     
     return jsonify(config)
 
-@app.route('/api/get_users')
+@OvaWeb.route('/api/get_users')
 def get_users():
     users = []
     
-    for filename in os.listdir(app.static_folder):
-        if filename.startswith('pfp_') and (filename.endswith('.jpg') or filename.endswith('.gif')):
-            # get user_id from filename
+    # search for config files in root
+    for filename in os.listdir():
+        if filename.startswith('config_user_') and filename.endswith('.json'):
             user_id = filename.split('_')[2].split('.')[0]
-            config_file = f"config_user_{user_id}.json"
-            if os.path.exists(config_file):
-                with open(config_file, 'r') as f:
-                    config = json.load(f)
-                    users.append({
-                        'id': user_id,
-                        'username': config.get('username', 'User'),
-                        'image': filename
-                    })
+            
+            with open(filename, 'r') as f:
+                config = json.load(f)
+                
+                # check if user has pfp
+                pfp_filename = None
+                if os.path.exists(os.path.join(OvaWeb.static_folder, f'pfp_user_{user_id}.jpg')):
+                    pfp_filename = f'pfp_user_{user_id}.jpg'
+                elif os.path.exists(os.path.join(OvaWeb.static_folder, f'pfp_user_{user_id}.gif')):
+                    pfp_filename = f'pfp_user_{user_id}.gif'
+                
+                users.append({
+                    'id': user_id,
+                    'username': config.get('username', 'User'),
+                    'image': pfp_filename
+                })
 
     # add guest option
     users.append({
@@ -259,11 +280,11 @@ def get_users():
     
     return jsonify({'users': users})
 
-@app.route('/')
+@OvaWeb.route('/')
 def home():
     return render_template('index.html')
 
-@app.route('/api/chat', methods=['POST'])
+@OvaWeb.route('/api/chat', methods=['POST'])
 def chat():
     data = request.json
     message = data.get('message')
@@ -305,7 +326,7 @@ def chat():
                 title_response = title_llm._call(title_prompt).strip()
             except Exception as e:
                 # fallback to a generic title if Ollama fails
-                app.logger.error(f"Failed to generate title with Ollama: {str(e)}")
+                OvaWeb.logger.error(f"Failed to generate title with Ollama: {str(e)}")
                 title_response = f"Conversation {conversation_id[:6]}"
         else:
             title_response = f"Conversation {conversation_id[:6]}"
@@ -361,12 +382,12 @@ def chat():
         "title": chat_history[conversation_id]['title']
     })
 
-@app.route('/api/get_conversations')
+@OvaWeb.route('/api/get_conversations')
 def get_conversations():
     chat_history = load_chat_history()
     return jsonify(chat_history)
 
-@app.route('/api/delete_conversation/<conversation_id>', methods=['DELETE'])
+@OvaWeb.route('/api/delete_conversation/<conversation_id>', methods=['DELETE'])
 def delete_conversation(conversation_id):
     user_id = request.args.get('user_id')
     if not user_id:
@@ -381,11 +402,11 @@ def delete_conversation(conversation_id):
         return jsonify({"success": True})
     return jsonify({"success": False}), 404
 
-@app.route('/api/get_pfp_type')
+@OvaWeb.route('/api/get_pfp_type')
 def get_pfp_type():
     user_id = request.args.get('user_id', 'default')
-    gif_path = os.path.join(app.static_folder, f"pfp_user_{user_id}.gif")
-    jpg_path = os.path.join(app.static_folder, f"pfp_user_{user_id}.jpg")
+    gif_path = os.path.join(OvaWeb.static_folder, f"pfp_user_{user_id}.gif")
+    jpg_path = os.path.join(OvaWeb.static_folder, f"pfp_user_{user_id}.jpg")
     
     if os.path.exists(gif_path):
         return jsonify({"type": "gif", "path": f"pfp_user_{user_id}.gif"})
@@ -393,7 +414,7 @@ def get_pfp_type():
         return jsonify({"type": "jpg", "path": f"pfp_user_{user_id}.jpg"})
     return jsonify({"type": None, "path": None})
 
-@app.route('/api/upload_pfp', methods=['POST'])
+@OvaWeb.route('/api/upload_pfp', methods=['POST'])
 def upload_pfp():
     if 'pfp' not in request.files:
         return jsonify({"error": "No file provided"}), 400
@@ -412,12 +433,12 @@ def upload_pfp():
         # delete existing profile pictures if they exist
         for existing in [f'pfp_user_{user_id}.jpg', f'pfp_user_{user_id}.gif']:
             try:
-                os.remove(os.path.join(app.static_folder, existing))
+                os.remove(os.path.join(OvaWeb.static_folder, existing))
             except OSError:
                 pass
             
         filename = f"pfp_user_{user_id}.gif" if ext == '.gif' else f"pfp_user_{user_id}.jpg"
-        file.save(os.path.join(app.static_folder, filename))
+        file.save(os.path.join(OvaWeb.static_folder, filename))
         
         # make default config with system prompt for new users
         config_file = f"config_user_{user_id}.json"
@@ -431,11 +452,55 @@ def upload_pfp():
                 
         return jsonify({"success": True, "filename": filename})
 
-@app.route('/api/cleanup_memory/<conversation_id>', methods=['POST'])
+@OvaWeb.route('/api/cleanup_memory/<conversation_id>', methods=['POST'])
 def cleanup_memory(conversation_id):
     if conversation_id in conversation_memories:
         del conversation_memories[conversation_id]
     return jsonify({"success": True})
 
+# error handling - avoids flooding terminal with okay requests and only displays errors.
+
+from flask import request
+
+@OvaWeb.errorhandler(404)
+def not_found(e):
+    print(f"[ERROR] 404 Not Found: {request.path}")
+    return "404 Page Not Found", 404
+
+@OvaWeb.errorhandler(403)
+def forbidden(e):
+    print(f"[ERROR] 403 Forbidden: {e}")
+    return "403 Forbidden", 403
+
+@OvaWeb.errorhandler(500)
+def server_error(e):
+    print(f"[ERROR] 500 Internal Server Error: {e}")
+    return "500 Internal Server Error", 500
+
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    try:
+        tprint("OvaWeb")
+    except artError as e:
+        print(f"Error printing ASCII art: {e}")
+    
+    print("Disabling flask default logger to avoid flooding ...")
+
+    log = logging.getLogger('werkzeug')
+    log.disabled = True
+    OvaWeb.logger.disabled = True
+
+    port = os.getenv("port")
+    print("Starting flask server ...")
+    try:
+        print(f"OvaWeb started on port: {port}")
+        print(f"Access at http://localhost:{port}\n")
+        print("Press CTRL+C to quit.\n")
+
+        OvaWeb.run(host="127.0.0.1", port=port, debug=False)
+
+    except Exception as e:
+        print(f"[ERROR] Failed to start Flask: {e}")
+
+    finally:
+        print("Flask server stopped.")

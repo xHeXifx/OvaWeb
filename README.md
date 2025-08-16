@@ -95,8 +95,6 @@ All CSS is in the `<style>` block at the top of `templates/index.html`. Change c
 ---
 
 # ⚠️ Known Issues ⚠️
-- Users wont be displayed in the login screen if a pfp isnt added alongside it
-- When creating a user (with a pfp) they arent logged in, a page refresh is required and then choosing the user otherwise chat elements dont start
 - Chat titles often bug out and the model creates incorrect/nonsense titles.
 - Not really an issue however i am aware the cloud/comptuter icon is off center.. i tried my best to fix it
 

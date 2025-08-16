@@ -165,25 +165,50 @@
         #input-container {
             display: flex;
             gap: 10px;
-            padding: 20px;
+            padding: 10px;
             background: var(--sidebar-dark);
-            border-radius: 10px;
+            border-radius: 9999px;
             margin: 0 20px;
+            align-items: flex-end;
         }
+
+        #input-container button {
+            width: 50px;
+            height: 50px;
+            border: none;
+            border-radius: 50%;
+            background: #2d5a9e;
+            color: white;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
 
         #message-input {
             flex-grow: 1;
             padding: 15px;
             border: none;
-            border-radius: 5px;
+            border-radius: 9999px;
             background: var(--bg-dark);
             color: var(--text-light);
+            resize: none;
+            max-height: 150px;
+            overflow-y: auto;
+            line-height: 1.4;
+            min-height: 50px;
+            height: 50px;
+            box-sizing: border-box;
         }
+
+
 
         button {
             padding: 10px 20px;
             border: none;
-            border-radius: 5px;
+            border-radius: 9999px;
             background: #2d5a9e;
             color: white;
             cursor: pointer;
@@ -222,6 +247,25 @@
 
         .typing-animation span {
             animation: blink 1.4s infinite both;
+        }
+
+        .loading-spinner {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #2d5a9e;
+            animation: spin 1s ease-in-out infinite;
+            z-index: 1000;
+        }
+        
+        @keyframes spin {
+            to { transform: translate(-50%, -50%) rotate(360deg); }
         }
         
         .typing-animation span:nth-child(2) { animation-delay: 0.2s; }
@@ -866,8 +910,8 @@
     <div id="main-content">
         <div id="chat-container"></div>
         <div id="input-container">
-            <input type="text" id="message-input" placeholder="Type your message...">
-            <button onclick="sendMessage()">Send</button>
+            <textarea id="message-input" placeholder="Type your message..." rows="1"></textarea>
+            <button onclick="sendMessage()" id="send-chat-btn"><i class="fa-regular fa-paper-plane"></i></button>
         </div>
     </div>
 
@@ -898,6 +942,7 @@
     <div id="settings-modal" class="modal">
         <div class="modal-content">
             <h3>Settings</h3>
+            <div class="loading-spinner" id="settings-spinner"></div>
             <div class="settings-form">
                 <div class="form-group">
                     <div class="settings-profile-row">
@@ -1197,6 +1242,8 @@
             const message = input.value.trim();
             if (!message) return;
 
+            input.style.height = '50px';
+
             const messageData = {
                 message: message,
                 conversation_id: currentConversationId,
@@ -1279,11 +1326,30 @@
             document.getElementById('sidebar').classList.toggle('collapsed');
         });
 
-        document.getElementById('message-input').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
+        document.getElementById('message-input').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
                 sendMessage();
             }
         });
+        
+
+        document.getElementById('message-input').addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+            
+            const sendButton = document.getElementById('send-chat-btn');
+            const inputHeight = this.scrollHeight;
+            const buttonHeight = sendButton.offsetHeight;
+            
+            const topOffset = (inputHeight - buttonHeight) / 2;
+            sendButton.style.transform = `translateY(-${topOffset}px)`;
+        });
+
+        function resetTextareaHeight() {
+            const textarea = document.getElementById('message-input');
+            textarea.style.height = '50px';
+        }
 
         window.addEventListener('load', async () => {
             showLoginScreen();
@@ -1554,6 +1620,12 @@
         }
 
         async function saveSettings() {
+            const spinner = document.getElementById('settings-spinner');
+            spinner.style.display = 'block';
+
+            const formElements = document.querySelectorAll('.settings-form input, .settings-form textarea, .settings-form button');
+            formElements.forEach(el => el.disabled = true);
+            
             if (currentUser === 'new') {
                 const pfpInput = document.getElementById('pfp-input');
                 if (pfpInput.files.length > 0) {
@@ -1566,16 +1638,6 @@
                 username: document.getElementById('username-input').value,
                 system_prompt: document.getElementById('system-prompt-input').value
             };
-
-            const response = await fetch(`/api/save_config?user_id=${currentUser}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(config)
-            });
-
-            const data = await response.json();
             
             const pfpInput = document.getElementById('pfp-input');
             if (pfpInput.files.length > 0) {
@@ -1588,20 +1650,21 @@
                 });
             }
 
+            const sleep = ms => new Promise(r => setTimeout(r, ms));
+            await sleep(3000);
+
+            const response = await fetch(`/api/save_config?user_id=${currentUser}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(config)
+            });
+
+            const data = await response.json();
+
             closeSettingsModal();
-            if (currentUser === 'new') {
-                currentUser = timestamp.toString();
-                showChatInterface();
-                await initializeChatInterface();
-            } else {
-                const pfpSrc = await getPfpSrc();
-                if (pfpSrc) {
-                    const userPics = document.querySelectorAll('.user-message .profile-pic img');
-                    userPics.forEach(pic => {
-                        pic.src = pfpSrc;
-                    });
-                }
-            }
+            showLoginScreen();
         }
 
         document.getElementById('pfp-input').onchange = function(e) {
