@@ -8,6 +8,8 @@ import json
 from datetime import datetime
 import os
 import requests
+import hashlib
+import time
 from typing import Any, Dict, List, Mapping, Optional
 from werkzeug.utils import secure_filename
 from langchain.schema import messages_from_dict, messages_to_dict
@@ -215,11 +217,18 @@ def save_config():
     user_id = request.args.get('user_id', 'default')
     config = request.json
     
-    
     # handle new user creation
     if user_id == 'new':
         user_id = datetime.now().strftime('%Y%m%d%H%M%S')
     
+    # Handle passcode if provided
+    if 'passcode' in config and config['passcode']:
+        # Hash the passcode using SHA256
+        passcode_hash = hashlib.sha256(config['passcode'].encode()).hexdigest()
+        # Store the hash instead of the plain text passcode
+        config['passcode_hash'] = passcode_hash
+        # Remove the plain text passcode
+        del config['passcode']
     
     # if no pfp, copy default pfp.jpg and rename to match new user
     if not os.path.exists(os.path.join(OvaWeb.static_folder, f"pfp_user_{user_id}.jpg")) and not os.path.exists(os.path.join(OvaWeb.static_folder, f"pfp_user_{user_id}.gif")):
@@ -227,8 +236,6 @@ def save_config():
         default_pfp = os.path.join(OvaWeb.static_folder, "pfp.jpg")
         user_pfp = os.path.join(OvaWeb.static_folder, f"pfp_user_{user_id}.jpg")
         shutil.copy2(default_pfp, user_pfp)
-
-
     
     config_file = f"config_user_{user_id}.json"
     with open(config_file, 'w') as f:
@@ -273,20 +280,54 @@ def get_users():
                 elif os.path.exists(os.path.join(OvaWeb.static_folder, f'pfp_user_{user_id}.gif')):
                     pfp_filename = f'pfp_user_{user_id}.gif'
                 
+                # Check if user has a passcode
+                has_passcode = 'passcode_hash' in config
+                
                 users.append({
                     'id': user_id,
                     'username': config.get('username', 'User'),
-                    'image': pfp_filename
+                    'image': pfp_filename,
+                    'has_passcode': has_passcode
                 })
 
     # add guest option
     users.append({
         'id': 'guest',
         'username': 'Guest',
-        'image': None
+        'image': None,
+        'has_passcode': False
     })
     
     return jsonify({'users': users})
+
+@OvaWeb.route('/api/verify_passcode', methods=['POST'])
+def verify_passcode():
+    data = request.json
+    user_id = data.get('user_id')
+    passcode = data.get('passcode')
+    
+    if not user_id or not passcode:
+        return jsonify({'success': False, 'message': 'Missing user ID or passcode'}), 400
+    
+    config_file = f"config_user_{user_id}.json"
+    if not os.path.exists(config_file):
+        return jsonify({'success': False, 'message': 'User not found'}), 404
+    
+    with open(config_file, 'r') as f:
+        config = json.load(f)
+    
+    if 'passcode_hash' not in config:
+        return jsonify({'success': False, 'message': 'User does not have a passcode'}), 400
+    
+    # hash provided passcode
+    passcode_hash = hashlib.sha256(passcode.encode()).hexdigest()
+    
+    if passcode_hash == config['passcode_hash']:
+        time.sleep(1)
+        return jsonify({'success': True, 'message': 'Passcode verified successfully'})
+    else:
+        time.sleep(1)
+        return jsonify({'success': False, 'message': 'Incorrect passcode'}), 401
 
 @OvaWeb.route('/')
 def home():
