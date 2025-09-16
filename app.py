@@ -17,12 +17,13 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from art import *
 import logging
+import sys
 
 load_dotenv()
 
 groq_key = os.getenv("GROQ_KEY")
 groq_model = os.getenv("GROQ_MODEL")
-
+current_dir = os.path.dirname(os.path.abspath(__file__))
 backend = os.getenv("backend")
 OLLAMA_HOST = os.getenv("OLLAMA_HOST")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL")
@@ -526,6 +527,28 @@ def server_error(e):
     print(f"[ERROR] 500 Internal Server Error: {e}")
     return "500 Internal Server Error", 500
 
+def newVerQuery():
+    req = f'https://api.github.com/gists/8db2e2960486e575efce866f89e9334c'
+    res = requests.get(req)
+    if res.status_code == 200:
+        gdata = res.json()
+        for filename, file_info in gdata["files"].items():
+            latestVersion = float(file_info["content"])
+        
+        if os.path.exists(os.path.join(current_dir, 'VERSION')):
+            with open(os.path.join(current_dir, 'VERSION'), 'r') as f:
+                currentVersion = float(f.read())
+                f.close()
+            
+            if currentVersion < latestVersion:
+                return True
+            else:
+                return False
+        else:
+            print("[UPDATER] Failed to fetch version from VERSION file. Does it exist?")
+    else:
+        print(f'[UPDATER] Failed to fetch version data from gist: {res.status_code}')
+
 
 if __name__ == '__main__':
     try:
@@ -533,6 +556,21 @@ if __name__ == '__main__':
     except artError as e:
         print(f"Error printing ASCII art: {e}")
     
+    if newVerQuery() == True:
+        print('[UPDATER] Wait! A new verision of OvaWeb is avalible.')
+        print('Run updater.py to automatically update to the newest version.')
+        print("")
+        print('[UPDATER] Contiue with outdated version? (y/n)')
+
+        usrInput = input('> ').lower()
+
+        if usrInput == 'y':
+            print('Continuing...')
+            print('')
+            print('')
+        else:
+            sys.exit(0)
+
     print("Disabling flask default logger to avoid flooding ...")
 
     log = logging.getLogger('werkzeug')
@@ -546,7 +584,7 @@ if __name__ == '__main__':
         print(f"Access at http://localhost:{port}\n")
         print("Press CTRL+C to quit.\n")
 
-        OvaWeb.run(host="127.0.0.1", port=port, debug=False)
+        OvaWeb.run(host="0.0.0.0", port=port, debug=False)
 
     except Exception as e:
         print(f"[ERROR] Failed to start Flask: {e}")

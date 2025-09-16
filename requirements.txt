@@ -4,3 +4,4 @@ langchain-core
 langchain-groq
 python-dotenv
 art
+gitpython
