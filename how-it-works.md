@@ -79,7 +79,7 @@ This document explains in detail how ts works ^w^
 
 ## Security Notes
 
-- No authentication; users are identified by profile selection.
+- SHA256 used for user passcodes however can be easily changed to something else by changing json
 - All data is stored locally; not suitable for production without further security.
 - When using local backend (Ollama), no API keys are sent to external services.
 - When using cloud backend (Groq), API key is required and stored in the .env file.
@@ -94,11 +94,6 @@ This document explains in detail how ts works ^w^
 - `.env`: Configuration file for backend selection and API keys
 - `groq-setup.md`: Instructions for setting up Groq cloud backend
 - `local-setup.md`: Instructions for setting up Ollama local backend
-
----
-
-## Note
-
-- Admittedly i did get AI to write this markdown file.. as i havent worked on ts for ages i dont fully remember how the flow works and it was just easier to chuck it to an AI instead of reading through the entire flow and writing ts. Forgive me 😭
+- `updater.py`: Automatic script updater for OvaWeb. Fetches new version and copies new files over automatically.
 
 ---
